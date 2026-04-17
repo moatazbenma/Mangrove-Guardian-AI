@@ -182,6 +182,7 @@ DATABASES = {
         'PORT': os.getenv('DB_PORT', '5432'),
         'OPTIONS': {
             'client_encoding': 'UTF8',
+            **({'sslmode': os.getenv('DB_SSLMODE')} if os.getenv('DB_SSLMODE') else {}),
         },
     }
 }
