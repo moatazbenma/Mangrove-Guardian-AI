@@ -1,0 +1,49 @@
+# Core Django
+Django==4.2.16
+djangorestframework==3.14.0
+django-filter==24.1
+
+# JWT Authentication
+djangorestframework-simplejwt==5.3.0
+
+# CORS
+django-cors-headers==4.3.0
+
+# Database
+psycopg2-binary==2.9.9
+python-decouple==3.8
+
+# Redis & Caching
+django-redis==5.4.0
+redis==5.0.1
+
+# Celery & Task Queue
+celery==5.3.4
+django-celery-beat==2.5.0
+django-celery-results==2.5.1
+kombu==5.3.4
+
+# Image Handling & Cloud Storage
+Pillow==10.1.0
+cloudinary==1.36.0
+django-cloudinary-storage==0.3.0
+
+# Environment Variables
+python-dotenv==1.0.0
+
+# HTTP Requests
+requests==2.31.0
+httpx==0.27.2
+openpyxl==3.1.5
+openai==1.51.2
+
+# Production Server
+gunicorn==21.2.0
+whitenoise==6.6.0
+
+# Monitoring & Logging
+python-json-logger==2.0.7
+
+# Development
+black==23.12.0
+flake8==6.1.0
