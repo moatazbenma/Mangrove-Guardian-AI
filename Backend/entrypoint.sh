@@ -1,6 +1,16 @@
 #!/bin/sh
 set -e
 
+APP_ROLE="${APP_ROLE:-web}"
+
+if [ "$APP_ROLE" = "worker" ]; then
+  exec celery -A config worker --loglevel=info --pool=solo
+fi
+
+if [ "$APP_ROLE" = "beat" ]; then
+  exec celery -A config beat --loglevel=info
+fi
+
 python manage.py migrate --noinput
 python manage.py collectstatic --noinput
 

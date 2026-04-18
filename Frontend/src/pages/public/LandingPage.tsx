@@ -111,7 +111,7 @@ const sampleTestimonials = [
   {
     quote:
       "Community photo reporting plus AI insights made restoration planning more accurate and faster.",
-    author: "Rafi Anwar, Field Coordinator",
+    author: "El Mouataz Benmanssour",
   },
 ];
 
