@@ -196,7 +196,8 @@ def analyze_report_image(self, report_id):
         # Initialize OpenAI client
         client = OpenAI(
             base_url="https://api.featherless.ai/v1",
-            api_key=settings.FEATHERLESS_API_KEY
+            api_key=settings.FEATHERLESS_API_KEY,
+            timeout=getattr(settings, "FEATHERLESS_TIMEOUT_SECONDS", 45),
         )
 
         models = getattr(
