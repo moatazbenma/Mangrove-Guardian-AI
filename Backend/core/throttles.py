@@ -8,6 +8,7 @@ Three-tier throttling strategy:
 """
 
 from rest_framework.throttling import UserRateThrottle, AnonRateThrottle
+from django.conf import settings
 
 
 class FailOpenThrottleMixin:
@@ -19,6 +20,8 @@ class FailOpenThrottleMixin:
     """
 
     def allow_request(self, request, view):
+        if not getattr(settings, 'THROTTLING_ENABLED', True):
+            return True
         try:
             return super().allow_request(request, view)
         except Exception:

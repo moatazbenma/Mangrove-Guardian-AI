@@ -293,6 +293,7 @@ FEATHERLESS_MULTIMODAL_MODELS = [
 ]
 ANALYSIS_ALLOW_DEGRADED_FALLBACK = _env_bool('ANALYSIS_ALLOW_DEGRADED_FALLBACK', default=False)
 ANALYSIS_FORCE_SYNC = _env_bool('ANALYSIS_FORCE_SYNC', default=False)
+THROTTLING_ENABLED = _env_bool('THROTTLING_ENABLED', default=True)
 
 # Celery Configuration
 CELERY_BROKER_URL = _normalize_rediss_url(
