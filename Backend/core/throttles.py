@@ -10,7 +10,22 @@ Three-tier throttling strategy:
 from rest_framework.throttling import UserRateThrottle, AnonRateThrottle
 
 
-class AuthThrottle(UserRateThrottle):
+class FailOpenThrottleMixin:
+    """
+    Keep API available if cache/throttle backend is temporarily unavailable.
+
+    If Redis auth/network fails, DRF throttle lookups can raise exceptions and
+    return 500. In that case, fail open and allow the request.
+    """
+
+    def allow_request(self, request, view):
+        try:
+            return super().allow_request(request, view)
+        except Exception:
+            return True
+
+
+class AuthThrottle(FailOpenThrottleMixin, UserRateThrottle):
     """
     Throttle for authentication endpoints (login, register, password reset).
     
@@ -21,7 +36,7 @@ class AuthThrottle(UserRateThrottle):
     rate = '5/min'
 
 
-class ImageAnalysisThrottle(UserRateThrottle):
+class ImageAnalysisThrottle(FailOpenThrottleMixin, UserRateThrottle):
     """
     Throttle for expensive image analysis operations.
     
@@ -32,7 +47,7 @@ class ImageAnalysisThrottle(UserRateThrottle):
     rate = '20/day'
 
 
-class GeneralThrottle(UserRateThrottle):
+class GeneralThrottle(FailOpenThrottleMixin, UserRateThrottle):
     """
     Throttle for general API operations (read, write, delete).
     
@@ -43,7 +58,7 @@ class GeneralThrottle(UserRateThrottle):
     rate = '100/hour'
 
 
-class AnonThrottle(AnonRateThrottle):
+class AnonThrottle(FailOpenThrottleMixin, AnonRateThrottle):
     """
     Throttle for anonymous (unauthenticated) users.
     
