@@ -11,7 +11,7 @@ from django.conf import settings
 from django.core.cache import cache
 from core.throttles import ImageAnalysisThrottle
 from kombu.exceptions import OperationalError
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
 from rest_framework.exceptions import ValidationError
 import logging
 
@@ -64,19 +64,20 @@ class AnalysisView(viewsets.ModelViewSet):
         except IntegrityError:
             raise ValidationError({"report": ["Analysis already exists for this report."]})
         
-        # Queue the async image analysis task.
-        # If Redis/Celery is unavailable, keep API stable and mark as failed
-        # so the client can trigger retry later.
-        try:
-            if getattr(settings, 'ANALYSIS_FORCE_SYNC', False):
-                analyze_report_image.apply(args=[report.id])
-            else:
-                analyze_report_image.delay(report.id)
-        except Exception:
-            logger.exception("Failed to enqueue analysis task for report_id=%s", report.id)
-            analysis.status = 'failed'
-            analysis.result = 'Analysis queue unavailable. Please retry.'
-            analysis.save(update_fields=['status', 'result', 'updated_at'])
+        # Queue the task only after transaction commit so worker can always see the report.
+        def _enqueue_after_commit():
+            try:
+                if getattr(settings, 'ANALYSIS_FORCE_SYNC', False):
+                    analyze_report_image.apply(args=[report.id])
+                else:
+                    analyze_report_image.delay(report.id)
+            except Exception:
+                logger.exception("Failed to enqueue analysis task for report_id=%s", report.id)
+                analysis.status = 'failed'
+                analysis.result = 'Analysis queue unavailable. Please retry.'
+                analysis.save(update_fields=['status', 'result', 'updated_at'])
+
+        transaction.on_commit(_enqueue_after_commit)
 
     @action(detail=True, methods=['post'])
     def retry(self, request, pk=None):
