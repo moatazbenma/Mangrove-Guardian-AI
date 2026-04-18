@@ -5,6 +5,11 @@ from .models import Analysis
 
 
 class AnalysisSerializer(serializers.ModelSerializer):
+    def validate_report(self, report):
+        if Analysis.objects.filter(report=report).exists():
+            raise serializers.ValidationError("Analysis already exists for this report.")
+        return report
+
     class Meta:
         model = Analysis
         fields = [

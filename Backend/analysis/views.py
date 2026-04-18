@@ -11,6 +11,8 @@ from django.conf import settings
 from django.core.cache import cache
 from core.throttles import ImageAnalysisThrottle
 from kombu.exceptions import OperationalError
+from django.db import IntegrityError
+from rest_framework.exceptions import ValidationError
 import logging
 
 logger = logging.getLogger(__name__)
@@ -58,14 +60,17 @@ class AnalysisView(viewsets.ModelViewSet):
             raise PermissionDenied("You cannot analyze another user's report.")
 
         # Save analysis record first
-        analysis = serializer.save()
+        try:
+            analysis = serializer.save()
+        except IntegrityError:
+            raise ValidationError({"report": ["Analysis already exists for this report."]})
         
         # Queue the async image analysis task.
         # If Redis/Celery is unavailable, keep API stable and mark as failed
         # so the client can trigger retry later.
         try:
             analyze_report_image.delay(report.id)
-        except OperationalError:
+        except Exception:
             logger.exception("Failed to enqueue analysis task for report_id=%s", report.id)
             analysis.status = 'failed'
             analysis.result = 'Analysis queue unavailable. Please retry.'
@@ -84,7 +89,15 @@ class AnalysisView(viewsets.ModelViewSet):
         analysis.result = None
         analysis.save(update_fields=['status', 'result', 'updated_at'])
 
-        analyze_report_image.delay(analysis.report_id)
+        try:
+            analyze_report_image.delay(analysis.report_id)
+        except Exception:
+            logger.exception("Failed to re-enqueue analysis task for report_id=%s", analysis.report_id)
+            analysis.status = 'failed'
+            analysis.result = 'Analysis queue unavailable. Please retry.'
+            analysis.save(update_fields=['status', 'result', 'updated_at'])
+            serializer = self.get_serializer(analysis)
+            return Response(serializer.data, status=status.HTTP_202_ACCEPTED)
 
         serializer = self.get_serializer(analysis)
         return Response(serializer.data, status=status.HTTP_202_ACCEPTED)

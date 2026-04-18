@@ -13,6 +13,7 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 from pathlib import Path
 from dotenv import load_dotenv
 import os
+from urllib.parse import urlparse, parse_qsl, urlencode, urlunparse
 
 # Load environment variables from .env file
 load_dotenv()
@@ -33,6 +34,26 @@ def _env_list(name: str, default: list[str]) -> list[str]:
     if not value:
         return default
     return [item.strip() for item in value.split(",") if item.strip()]
+
+
+def _normalize_rediss_url(url: str | None) -> str | None:
+    """
+    Ensure rediss URLs include ssl_cert_reqs to satisfy redis-py parsing.
+    """
+    if not url:
+        return url
+
+    parsed = urlparse(url)
+    if parsed.scheme != 'rediss':
+        return url
+
+    query = dict(parse_qsl(parsed.query, keep_blank_values=True))
+    if 'ssl_cert_reqs' not in query:
+        query['ssl_cert_reqs'] = 'none'
+        parsed = parsed._replace(query=urlencode(query))
+        return urlunparse(parsed)
+
+    return url
 
 
 # Quick-start development settings - unsuitable for production
@@ -65,7 +86,7 @@ DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
 CACHES = {
     "default": {
         "BACKEND": "django_redis.cache.RedisCache",
-        "LOCATION": os.getenv('REDIS_URL', 'redis://127.0.0.1:6379/1'),
+        "LOCATION": _normalize_rediss_url(os.getenv('REDIS_URL', 'redis://127.0.0.1:6379/1')),
         "OPTIONS": {
             "CLIENT_CLASS": "django_redis.client.DefaultClient",
         }
@@ -273,8 +294,12 @@ FEATHERLESS_MULTIMODAL_MODELS = [
 ANALYSIS_ALLOW_DEGRADED_FALLBACK = _env_bool('ANALYSIS_ALLOW_DEGRADED_FALLBACK', default=False)
 
 # Celery Configuration
-CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', os.getenv('REDIS_URL', 'redis://127.0.0.1:6379/1'))
-CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND', os.getenv('REDIS_URL', 'redis://127.0.0.1:6379/1'))
+CELERY_BROKER_URL = _normalize_rediss_url(
+    os.getenv('CELERY_BROKER_URL', os.getenv('REDIS_URL', 'redis://127.0.0.1:6379/1'))
+)
+CELERY_RESULT_BACKEND = _normalize_rediss_url(
+    os.getenv('CELERY_RESULT_BACKEND', os.getenv('REDIS_URL', 'redis://127.0.0.1:6379/1'))
+)
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
