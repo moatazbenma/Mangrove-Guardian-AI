@@ -1,5 +1,11 @@
 import { jwtDecode } from "jwt-decode";
 
+const API_BASE_URL =
+  import.meta.env.VITE_API_URL ||
+  (import.meta.env.PROD
+    ? "https://mangrove-guardian-ai.onrender.com/api"
+    : "http://localhost:8000/api");
+
 interface TokenPayload {
   username: string;
   role: string;
@@ -24,7 +30,7 @@ export async function refreshAccessToken(): Promise<boolean> {
   if (!refreshToken) return false;
 
   try {
-    const response = await fetch("http://localhost:8000/api/token/refresh/", {
+    const response = await fetch(`${API_BASE_URL}/token/refresh/`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

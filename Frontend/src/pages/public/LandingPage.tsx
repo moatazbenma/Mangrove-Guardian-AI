@@ -5,6 +5,12 @@ import { MapContainer, Marker, Popup, TileLayer } from "react-leaflet";
 import L from "leaflet";
 import type { RestorationProject } from "../../types";
 
+const API_BASE_URL =
+  import.meta.env.VITE_API_URL ||
+  (import.meta.env.PROD
+    ? "https://mangrove-guardian-ai.onrender.com/api"
+    : "http://localhost:8000/api");
+
 // SVG Icons
 const Icons = {
   Globe: () => (
@@ -115,15 +121,15 @@ export function LandingPage() {
   const [error, setError] = useState<string | null>(null);
   const [email, setEmail] = useState("");
   const [newsletterMessage, setNewsletterMessage] = useState<string | null>(null);
-  const [communitiesCount, setCommunitiesCount] = useState(0);
-  const [organizationsCount, setOrganizationsCount] = useState(0);
+  const [communitiesCount] = useState(0);
+  const [organizationsCount] = useState(0);
 
   useEffect(() => {
     const fetchCompletedProjects = async () => {
       setLoading(true);
       setError(null);
       try {
-        const response = await fetch("http://localhost:8000/api/projects/completed-public/");
+        const response = await fetch(`${API_BASE_URL}/projects/completed-public/`);
         if (!response.ok) {
           throw new Error("Failed to load completed restoration projects");
         }
@@ -136,25 +142,7 @@ export function LandingPage() {
       }
     };
 
-    const fetchCommunityStats = async () => {
-      try {
-        const usersResponse = await fetch("http://localhost:8000/api/users/");
-        if (usersResponse.ok) {
-          const usersData = await usersResponse.json();
-          const users = normalizeList<unknown>(usersData);
-          const communities = users.filter((user: unknown) => (user as { role?: string }).role === "community").length;
-          const organizations = users.filter((user: unknown) => (user as { role?: string }).role === "organization").length;
-          setCommunitiesCount(communities);
-          setOrganizationsCount(organizations);
-        }
-      } catch (_error) {
-        setCommunitiesCount(0);
-        setOrganizationsCount(0);
-      }
-    };
-
     fetchCompletedProjects();
-    fetchCommunityStats();
   }, []);
 
   const totalTrees = useMemo(
