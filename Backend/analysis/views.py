@@ -24,28 +24,27 @@ class AnalysisView(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        
-        # Create cache key based on user role
+
+        # Build base queryset by role first.
         if user.role == "organization":
-            cache_key = "analyses:all"
-            cached_data = cache.get(cache_key)
-            
-            if cached_data is not None:
-                return cached_data
-            
             queryset = Analysis.objects.all()
-            cache.set(cache_key, queryset, timeout=300)  # Cache for 5 minutes
-            return queryset
+            cache_key = "analyses:all"
         else:
-            cache_key = f"analyses:user_{user.id}"
-            cached_data = cache.get(cache_key)
-            
-            if cached_data is not None:
-                return cached_data
-            
             queryset = Analysis.objects.filter(report__user=user)
-            cache.set(cache_key, queryset, timeout=300)  # Cache for 5 minutes
-            return queryset
+            cache_key = f"analyses:user_{user.id}"
+
+        # Cache is optional: if Redis URL/config is invalid, do not break API reads.
+        try:
+            cached_ids = cache.get(cache_key)
+            if cached_ids is not None:
+                return queryset.filter(id__in=cached_ids)
+
+            ids = list(queryset.values_list('id', flat=True))
+            cache.set(cache_key, ids, timeout=300)
+        except Exception:
+            logger.exception("Analysis cache unavailable; serving queryset directly")
+
+        return queryset
 
 
 
