@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react";
 import api from "../services/api";
-import type { AnalysisData, Report } from "../types";
+import type { Report } from "../types";
 
 export interface UseReportsReturn {
   reports: Report[];

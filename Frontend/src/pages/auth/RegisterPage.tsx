@@ -12,7 +12,7 @@ export function RegisterPage(){
     const [role, setRole] = useState("")
     const [submitting, setSubmitting] = useState(false)
     const [error, setError] = useState("")
-    const [errorTimeout, setErrorTimeout] = useState<NodeJS.Timeout | null>(null)
+    const [errorTimeout, setErrorTimeout] = useState<ReturnType<typeof setTimeout> | null>(null)
 
 
     const navigate = useNavigate()

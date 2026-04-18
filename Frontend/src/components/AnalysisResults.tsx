@@ -12,6 +12,9 @@ export function AnalysisResults({ analysis }: AnalysisResultsProps) {
   if (!analysis || analysis.status !== 'complete') return null;
 
   const isProvisional = (analysis.result || '').toLowerCase().includes('provisional estimate');
+  const riskLevelLabel = analysis.risk_level
+    ? `${analysis.risk_level.charAt(0).toUpperCase()}${analysis.risk_level.slice(1).toLowerCase()}`
+    : 'Unknown';
 
   const getRiskColor = (risk: string | null | undefined) => {
     switch (risk?.toLowerCase()) {
@@ -103,7 +106,7 @@ export function AnalysisResults({ analysis }: AnalysisResultsProps) {
             <span
               className={`inline-block rounded-lg px-4 py-2 font-bold ${getRiskBadgeColor(analysis.risk_level)}`}
             >
-              {analysis.risk_level?.charAt(0).toUpperCase() + analysis.risk_level?.slice(1).toLowerCase() || 'Unknown'}
+              {riskLevelLabel}
             </span>
           </div>
         </div>

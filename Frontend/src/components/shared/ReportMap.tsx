@@ -1,47 +1,6 @@
 import { MapContainer, TileLayer, Marker, Popup, ZoomControl } from "react-leaflet";
 import L from "leaflet";
-
-interface Analysis {
-  id: number;
-  health_score: number;
-  damage_detected: boolean;
-  risk_level: string;
-  result: string;
-}
-
-interface Report {
-  id: number;
-  location: string;
-  description: string;
-  lat: number;
-  lng: number;
-  photo?: string;
-  user?: string;
-  date_submitted?: string;
-  analysis?: Analysis | null;
-}
-
-interface RestorationEvent {
-  id: number;
-  project: number;
-  trees_planted: number;
-  description: string;
-  date: string;
-}
-
-interface RestorationProject {
-  id: number;
-  name: string;
-  description: string;
-  location: string;
-  lat: number;
-  lng: number;
-  start_date: string;
-  end_date?: string;
-  status: "planned" | "ongoing" | "completed";
-  created_by: string;
-  events: RestorationEvent[];
-}
+import type { Report, RestorationProject } from "../../types";
 
 interface Props {
   reports: Report[];
@@ -50,7 +9,7 @@ interface Props {
 
 type RiskLevel = "high" | "medium" | "low";
 
-function normalizeRiskLevel(level?: string): RiskLevel {
+function normalizeRiskLevel(level?: string | null): RiskLevel {
   const normalized = (level || "low").toLowerCase();
   if (normalized === "high") return "high";
   if (normalized === "medium") return "medium";
@@ -188,7 +147,7 @@ export function ReportMap({ reports, projects = [] }: Props) {
                         <div className="report-popup__analysis-grid">
                           <div className="report-popup__stat">
                             <p className="report-popup__stat-label">Health</p>
-                            <p className="report-popup__stat-value">{r.analysis.health_score}/100</p>
+                            <p className="report-popup__stat-value">{r.analysis.health_score ?? "N/A"}/100</p>
                           </div>
                           <div className="report-popup__stat">
                             <p className="report-popup__stat-label">Damage</p>

@@ -1,4 +1,4 @@
-import { AnalysisData } from "../../hooks/useReports";
+import type { AnalysisData } from "../../types";
 
 export interface ReportCardProps {
   id: number;
@@ -9,7 +9,7 @@ export interface ReportCardProps {
   date_submitted?: string;
 }
 
-function riskClass(level?: string): string {
+function riskClass(level?: string | null): string {
   const normalized = (level || "low").toLowerCase();
   if (normalized === "high") return "chip-high";
   if (normalized === "medium") return "chip-medium";
@@ -17,7 +17,6 @@ function riskClass(level?: string): string {
 }
 
 export function ReportCard({
-  id,
   location,
   description,
   photo,

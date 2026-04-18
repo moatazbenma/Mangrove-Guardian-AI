@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import api from '../services/api';
 import type { AnalysisData } from '../types';
 
@@ -18,7 +18,7 @@ export function useAnalysisPoller(analysisId: number | null, enabled: boolean = 
     }
 
     let isMounted = true;
-    let interval: NodeJS.Timeout | null = null;
+    let interval: ReturnType<typeof setInterval> | null = null;
 
     const fetchAnalysis = async () => {
       try {
