@@ -68,7 +68,10 @@ class AnalysisView(viewsets.ModelViewSet):
         # If Redis/Celery is unavailable, keep API stable and mark as failed
         # so the client can trigger retry later.
         try:
-            analyze_report_image.delay(report.id)
+            if getattr(settings, 'ANALYSIS_FORCE_SYNC', False):
+                analyze_report_image.apply(args=[report.id])
+            else:
+                analyze_report_image.delay(report.id)
         except Exception:
             logger.exception("Failed to enqueue analysis task for report_id=%s", report.id)
             analysis.status = 'failed'
@@ -89,7 +92,10 @@ class AnalysisView(viewsets.ModelViewSet):
         analysis.save(update_fields=['status', 'result', 'updated_at'])
 
         try:
-            analyze_report_image.delay(analysis.report_id)
+            if getattr(settings, 'ANALYSIS_FORCE_SYNC', False):
+                analyze_report_image.apply(args=[analysis.report_id])
+            else:
+                analyze_report_image.delay(analysis.report_id)
         except Exception:
             logger.exception("Failed to re-enqueue analysis task for report_id=%s", analysis.report_id)
             analysis.status = 'failed'
