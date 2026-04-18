@@ -22,6 +22,11 @@ class AnalysisView(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
     throttle_classes = [ImageAnalysisThrottle]
 
+    @staticmethod
+    def _invalidate_analysis_cache_for_user(user_id: int):
+        cache.delete("analyses:all")
+        cache.delete(f"analyses:user_{user_id}")
+
     def get_queryset(self):
         user = self.request.user
 
@@ -32,6 +37,10 @@ class AnalysisView(viewsets.ModelViewSet):
         else:
             queryset = Analysis.objects.filter(report__user=user)
             cache_key = f"analyses:user_{user.id}"
+
+        # Never cache detail lookups to avoid stale-ID 404s right after creation.
+        if getattr(self, "action", None) == "retrieve":
+            return queryset
 
         # Cache is optional: if Redis URL/config is invalid, do not break API reads.
         try:
@@ -63,6 +72,8 @@ class AnalysisView(viewsets.ModelViewSet):
             analysis = serializer.save()
         except IntegrityError:
             raise ValidationError({"report": ["Analysis already exists for this report."]})
+
+        self._invalidate_analysis_cache_for_user(report.user_id)
         
         # Queue the task only after transaction commit so worker can always see the report.
         def _enqueue_after_commit():
@@ -91,6 +102,7 @@ class AnalysisView(viewsets.ModelViewSet):
         analysis.status = 'pending'
         analysis.result = None
         analysis.save(update_fields=['status', 'result', 'updated_at'])
+        self._invalidate_analysis_cache_for_user(analysis.report.user_id)
 
         try:
             if getattr(settings, 'ANALYSIS_FORCE_SYNC', False):
