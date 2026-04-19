@@ -16,6 +16,12 @@ Mangrove Guardian AI enables communities and organizations to:
 
 ---
 
+## 🎥 Demo
+
+Project demo video: https://youtu.be/aZBV_R53PRY
+
+---
+
 ## 🏗️ Tech Stack
 
 ### Frontend
