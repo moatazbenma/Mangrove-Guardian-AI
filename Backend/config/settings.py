@@ -85,11 +85,13 @@ DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
 
 CACHES = {
     "default": {
-        "BACKEND": "django_redis.cache.RedisCache",
-        "LOCATION": _normalize_rediss_url(os.getenv('REDIS_URL', 'redis://127.0.0.1:6379/1')),
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache" if _env_bool('CACHE_DISABLE_REDIS', default=False)
+        else "django_redis.cache.RedisCache",
+        "LOCATION": "unique-snowflake" if _env_bool('CACHE_DISABLE_REDIS', default=False)
+        else _normalize_rediss_url(os.getenv('REDIS_URL', 'redis://127.0.0.1:6379/1')),
         "OPTIONS": {
             "CLIENT_CLASS": "django_redis.client.DefaultClient",
-        }
+        } if not _env_bool('CACHE_DISABLE_REDIS', default=False) else {}
     }
 }
 
@@ -295,6 +297,8 @@ FEATHERLESS_MULTIMODAL_MODELS = [
 ANALYSIS_ALLOW_DEGRADED_FALLBACK = _env_bool('ANALYSIS_ALLOW_DEGRADED_FALLBACK', default=False)
 ANALYSIS_FORCE_SYNC = _env_bool('ANALYSIS_FORCE_SYNC', default=False)
 THROTTLING_ENABLED = _env_bool('THROTTLING_ENABLED', default=True)
+CACHING_ENABLED = _env_bool('CACHING_ENABLED', default=True)
+CACHE_DISABLE_REDIS = _env_bool('CACHE_DISABLE_REDIS', default=False)
 
 # Celery Configuration
 CELERY_BROKER_URL = _normalize_rediss_url(

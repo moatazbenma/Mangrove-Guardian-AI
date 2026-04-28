@@ -33,16 +33,19 @@ class AnalysisView(viewsets.ModelViewSet):
         # Build base queryset by role first.
         if user.role == "organization":
             queryset = Analysis.objects.all()
-            cache_key = "analyses:all"
         else:
             queryset = Analysis.objects.filter(report__user=user)
-            cache_key = f"analyses:user_{user.id}"
 
         # Never cache detail lookups to avoid stale-ID 404s right after creation.
         if getattr(self, "action", None) == "retrieve":
             return queryset
 
+        # Cache is optional and disabled if CACHE_DISABLE_REDIS is set
+        if getattr(settings, 'CACHE_DISABLE_REDIS', False) or not getattr(settings, 'CACHING_ENABLED', True):
+            return queryset
+
         # Cache is optional: if Redis URL/config is invalid, do not break API reads.
+        cache_key = f"analyses:user_{user.id}" if user.role != "organization" else "analyses:all"
         try:
             cached_ids = cache.get(cache_key)
             if cached_ids is not None:
