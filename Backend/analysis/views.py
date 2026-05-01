@@ -31,7 +31,7 @@ class AnalysisView(viewsets.ModelViewSet):
         user = self.request.user
 
         # Build base queryset by role first.
-        if user.role == "organization":
+        if user.role == "organization" and user.is_approved:
             queryset = Analysis.objects.all()
         else:
             queryset = Analysis.objects.filter(report__user=user)
