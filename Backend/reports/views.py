@@ -8,6 +8,11 @@ from django.http import HttpResponse
 import openpyxl
 import django_filters.rest_framework
 from core.throttles import GeneralThrottle
+from django.core.cache import cache
+import logging
+
+
+logger = logging.getLogger(__name__)
 
 class ReportViewSet(viewsets.ModelViewSet):
     serializer_class = ReportSerializer
@@ -21,10 +26,28 @@ class ReportViewSet(viewsets.ModelViewSet):
         user = self.request.user
 
         if user.role == "organization" and user.is_approved:
-            return Report.objects.all()
+            queryset = Report.objects.all().order_by('-id')
+            cache_key = "reports:all"
+            logger.info("organisation")
+        else:
+            queryset = Report.objects.filter(user=self.request.user)
+            cache_key = f"reports:user_{user.id}"
+            logger.info("community")
 
-        return Report.objects.filter(user=self.request.user)
-    
+        try:
+            cache_ids = cache.get(cache_key)
+            if cache_ids is not None:
+                logger.info("worked")
+                return queryset.filter(id__in=cache_ids)
+            
+            logger.info("Mess")
+            
+            ids = list(queryset.values_list('id', flat=True))
+            cache.set(cache_key, ids, timeout=300)
+        except:
+            logger.exception("Reports cache unavailable; serving queryset directly")
+
+        return queryset
 
     def perform_create(self, serializer):
         user = self.request.user
@@ -33,6 +56,8 @@ class ReportViewSet(viewsets.ModelViewSet):
             raise PermissionDenied("Only community users can submit reports.")
 
         serializer.save(user=user)
+        cache.delete("reports:all")
+        logger.info("Invalidated reports cache")
 
     def perform_destroy(self, instance):
         user = self.request.user
