@@ -325,13 +325,12 @@ def analyze_report_image(self, report_id):
             logger.warning(f"Schema validation failed: {e}")
             raise Exception("AI output did not match required schema")
 
-        data = validated.model_dump()
 
         # Update existing analysis record with results
-        analysis.health_score = data.get("health_score")
-        analysis.damage_detected = data.get("damage_detected")
-        analysis.risk_level = data.get("risk_level")
-        analysis.result = data.get("result")
+        analysis.health_score = validated.get("health_score")
+        analysis.damage_detected = validated.get("damage_detected")
+        analysis.risk_level = validated.get("risk_level")
+        analysis.result = validated.get("result")
         analysis.status = 'complete'
         analysis.save()
 
