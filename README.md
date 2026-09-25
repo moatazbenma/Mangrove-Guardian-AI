@@ -1,159 +1,194 @@
 # 🌳 Mangrove Guardian AI
 
-A comprehensive web platform for reporting, monitoring, and restoring mangrove ecosystems using AI-powered analysis and community engagement.
+**Community-powered mangrove monitoring with AI damage assessment.**
 
-**Status:** Production-Ready | **Version:** 1.0.0
+Mangrove Guardian AI lets coastal communities report damaged mangroves with a photo and a location. A multimodal AI model scores the ecosystem's health. Conservation organizations use the same platform to review reports, plan restoration projects, and track trees planted.
+
+🎥 **Demo video:** https://youtu.be/aZBV_R53PRY
+
+![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-6-3178C6?logo=typescript&logoColor=white)
+![Django](https://img.shields.io/badge/Django-4.2_LTS-092E20?logo=django&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-4169E1?logo=postgresql&logoColor=white)
+![Redis](https://img.shields.io/badge/Redis-7-DC382D?logo=redis&logoColor=white)
+![Celery](https://img.shields.io/badge/Celery-5.3-37814A?logo=celery&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
+![License](https://img.shields.io/badge/License-MIT-green)
 
 ---
 
-## 📋 Project Overview
+## 📋 Table of Contents
 
-Mangrove Guardian AI enables communities and organizations to:
-- **Report mangrove damage** with geolocation and photographic evidence
-- **Analyze damage** using AI inference to assess health scores and risk levels
-- **Track restoration** projects and measure environmental impact
-- **Collaborate** across community and organizational user roles
+- [Why It Matters](#-why-it-matters)
+- [Features](#-features)
+- [How the AI Analysis Works](#-how-the-ai-analysis-works)
+- [Architecture](#️-architecture)
+- [Tech Stack](#️-tech-stack)
+- [Getting Started](#-getting-started)
+- [Configuration](#-configuration)
+- [API Reference](#-api-reference)
+- [Data Model](#️-data-model)
+- [Rate Limiting and Caching](#️-rate-limiting-and-caching)
+- [Deployment](#-deployment)
+- [Project Structure](#-project-structure)
+- [Documentation](#-documentation)
+- [Contributing](#-contributing)
+- [License](#-license)
 
 ---
 
-## 🎥 Demo
+## 🌍 Why It Matters
 
-Project demo video: https://youtu.be/aZBV_R53PRY
+Mangrove forests protect coastlines from storms and flooding, and they are nurseries for marine life. They also store more carbon per hectare than most other forests. Damage often goes unreported until it is severe, because monitoring large coastal areas is expensive.
+
+Mangrove Guardian AI turns local communities into a monitoring network. It gives organizations a fast, AI-assisted first assessment of every report.
+
+---
+
+## ✨ Features
+
+### For community members
+- **Report damage** with a photo, a description, and a location picked on an interactive map (Leaflet)
+- **Get an AI assessment** of each report: health score (0–100), damage detected (yes/no), risk level (low/medium/high), and a short explanation
+- **Follow progress** live while the analysis runs, and retry a failed analysis
+
+### For organizations
+- **Review all reports** on a map and in a dashboard
+- **Export reports** to Excel (`.xlsx`)
+- **Manage restoration projects** (planned, ongoing, completed) and log restoration events with the number of trees planted
+- **Admin approval** for organization accounts (optional, `REQUIRE_ORG_APPROVAL`)
+
+### For the public
+- **Landing page** that lists completed restoration projects (no login needed)
+
+---
+
+## 🤖 How the AI Analysis Works
+
+Analysis runs in the background, so the API responds at once and the UI polls for the result.
+
+```
+Report submitted ──▶ POST /api/analysis/ ──▶ Analysis row (status: pending)
+                                                   │
+                                   transaction.on_commit
+                                                   ▼
+                                  Celery task: analyze_report_image
+                                                   │
+                     Photo URL (Cloudinary) + description sent to
+                     Gemma 3 12B (multimodal) via Featherless AI
+                                                   │
+                     JSON extracted ─▶ normalized ─▶ validated (Pydantic)
+                                                   ▼
+                                  Analysis row (status: complete)
+```
+
+Reliability features in [`Backend/analysis/tasks.py`](Backend/analysis/tasks.py):
+
+- **Strict output schema.** Pydantic validates the model response: `health_score` from 0 to 100, `damage_detected` as a boolean, `risk_level` as `low`, `medium`, or `high`, and `result` as text.
+- **Output normalization.** The task extracts JSON from plain or fenced model output and converts values to the right types before validation.
+- **Automatic retries.** Timeouts, connection errors, and provider errors retry with exponential backoff (30 s up to 15 min, maximum 8 retries).
+- **Refusal detection.** The task detects replies where the model says it cannot see the image, and treats them as failures.
+- **Optional degraded mode.** With `ANALYSIS_ALLOW_DEGRADED_FALLBACK=True`, a keyword heuristic gives a provisional score when the AI provider is down. The result is clearly marked as provisional.
+- **Queue safety.** The task is queued only after the database transaction commits. If the queue is unavailable, the analysis is marked `failed` with a clear message.
+
+---
+
+## 🏛️ Architecture
+
+![Mangrove Guardian AI System Architecture](./Architecture.png)
+
+| Layer | Components |
+|-------|------------|
+| **Client** | React 19 + TypeScript + Tailwind CSS, served by Vite (development) or Vercel/Nginx (production) |
+| **Gateway** | Nginx reverse proxy with TLS (production) |
+| **API** | Django REST Framework on Gunicorn: JWT authentication, role-based access, rate limiting |
+| **Workers** | Celery worker (AI analysis), Celery Beat (scheduled jobs) |
+| **Data** | PostgreSQL (primary data), Redis (cache, throttle counters, Celery broker) |
+| **External** | Cloudinary (image storage and CDN), Featherless AI (LLM inference) |
+
+For the database schema, authentication flow, and deployment diagrams, see [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ---
 
 ## 🏗️ Tech Stack
 
-### Frontend
-- **React 19** + TypeScript
-- **Vite** for fast development & bundling
-- **Tailwind CSS v4** for responsive UI with custom eco-theme
-- **React Router** for navigation
-- **React-Leaflet** for interactive maps
-- **Axios** with JWT authentication
-
-### Backend
-- **Django 4.2.16 LTS** + Django REST Framework
-- **Python 3.11**
-- **Gunicorn WSGI** server (4 workers)
-- **SimpleJWT** for token-based authentication
-- **PostgreSQL 15** (production) / SQLite (development)
-
-### Services & Infrastructure
-- **Redis 7** for caching and rate limiting
-- **Celery 5.3.4** for async task processing
-- **Celery Beat** for scheduled jobs
-- **Cloudinary** for image storage and CDN
-- **Docker** with 6-service orchestration
-- **Nginx** for production reverse proxy
+| Area | Technology |
+|------|------------|
+| Frontend | React 19, TypeScript, Vite, Tailwind CSS v4, React Router 7, React-Leaflet, Axios, jwt-decode |
+| Backend | Python 3.11, Django 4.2 LTS, Django REST Framework, SimpleJWT, django-filter |
+| Async | Celery 5.3, Celery Beat (`django-celery-beat`), Redis 7 |
+| Database | PostgreSQL 15 |
+| AI | Featherless AI (OpenAI-compatible API), Gemma 3 12B instruction-tuned model, Pydantic |
+| Storage | Cloudinary |
+| Infrastructure | Docker Compose, Gunicorn, Nginx, WhiteNoise, Vercel (frontend) |
 
 ---
 
-## 🏛️ System Architecture
-
-![Mangrove Guardian AI System Architecture](./Architecture.png)
-
-**Architecture Overview:**
-- **Client Layer** - React 18 frontend with TypeScript and Tailwind CSS
-- **API Gateway** - Nginx reverse proxy (production) with request routing
-- **Application Layer** - Django REST API with rate limiting, JWT authentication, and role-based access
-- **Services Layer** - Celery workers for async tasks, Redis cache, PostgreSQL database
-- **Supporting Services** - Cloudinary CDN for image storage, logging infrastructure, monitoring
-
-**Key Data Flows:**
-1. **Report Submission** → Upload photo to Cloudinary → Store metadata in DB → Trigger Celery task → AI Analysis → Cache results
-2. **Authentication** → Login with JWT → Store token → Add to headers → Automatic refresh → Role validation
-3. **Rate Limiting** → Check Redis counter → Enforce 3-tier limits → Return 429 if exceeded → Display 15s notification
-
-See [ARCHITECTURE.md](ARCHITECTURE.md) for comprehensive documentation including database schema, API endpoints, authentication flows, and deployment details.
-
----
-
-## 📁 Project Structure
-
-```
-Mangrove-Guardian-AI/
-├── Backend/                      # Django application
-│   ├── config/                   # Project settings
-│   ├── analysis/                 # AI analysis app (health scoring, risk assessment)
-│   ├── reports/                  # Report submission & management
-│   ├── restoration/              # Project & event tracking
-│   ├── users/                    # Authentication & user management
-│   ├── core/                     # Rate limiting & utilities
-│   └── manage.py
-│
-├── Frontend/                     # React application
-│   ├── src/
-│   │   ├── pages/                # Landing, Auth, Dashboard, Reports, Restoration
-│   │   ├── components/           # Reusable UI components
-│   │   ├── api/                  # Axios client & endpoints
-│   │   └── assets/               # Icons & styles
-│   ├── package.json
-│   └── vite.config.ts
-│
-├── docker-compose.yml            # Development environment
-├── docker-compose.prod.yml       # Production environment
-├── ARCHITECTURE.md               # Detailed system architecture
-├── DOCKER.md                     # Docker deployment guide
-├── DOCKER_QUICKSTART.md          # Quick start instructions
-├── .env.example                   # Environment template
-└── .env                          # Active environment file for Docker Compose
-
-```
-
----
-
-## 🚀 Quick Start
+## 🚀 Getting Started
 
 ### Prerequisites
-- Docker & Docker Compose
-- Node.js 20+ (for local frontend development)
-- Python 3.11+ (for local backend development)
 
-### Development Setup (Docker)
+- Docker and Docker Compose
+- A [Cloudinary](https://cloudinary.com/) account (free tier is enough)
+- A [Featherless AI](https://featherless.ai/) API key
+- Optional, for development without Docker: Python 3.11+, Node.js 20+, PostgreSQL, and Redis
+
+### Option A: Docker (recommended)
 
 ```bash
-# Clone the repository
-git clone https://github.com/yourusername/Mangrove-Guardian-AI.git
+git clone https://github.com/moatazbenma/Mangrove-Guardian-AI.git
 cd Mangrove-Guardian-AI
 
-# Create active environment file (docker compose reads .env by default)
+# Create the environment file that Docker Compose reads
 cp .env.example .env
-
-# Edit .env with your configuration
-# (Database credentials, JWT secret, Cloudinary API keys, etc.)
-
-# Build and start services
-docker compose up -d
-
-# Run migrations
-docker compose exec backend python manage.py migrate
-
-# Create superuser
-docker compose exec backend python manage.py createsuperuser
-
-# Collect static files
-docker compose exec backend python manage.py collectstatic --noinput
-
-# Access the application
-# Frontend: http://localhost:5173
-# Backend API: http://localhost:8000
-# Admin: http://localhost:8000/admin
 ```
 
-### Local Development (Without Docker)
+Edit `.env` and set at least `SECRET_KEY`, the `CLOUDINARY_*` values, and `FEATHERLESS_API_KEY`. Docker Compose does not start without `FEATHERLESS_API_KEY`.
 
-**Backend:**
+```bash
+docker compose up -d --build
+
+# Create an admin account
+docker compose exec backend python manage.py createsuperuser
+```
+
+The backend container runs migrations and `collectstatic` automatically when it starts.
+
+| Service | URL |
+|---------|-----|
+| Frontend | http://localhost:5173 |
+| API | http://localhost:8000/api |
+| Django admin | http://localhost:8000/admin |
+
+Helper scripts are also available: `./docker-setup.sh` (macOS/Linux) or `docker-setup.bat` (Windows).
+
+### Option B: Local development without Docker
+
+Start PostgreSQL and Redis first.
+
+**Backend**
+
 ```bash
 cd Backend
 python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+source venv/bin/activate        # Windows: venv\Scripts\activate
 pip install -r requirements.txt
+cp .env.example .env            # then edit the values
 python manage.py migrate
 python manage.py runserver
 ```
 
-**Frontend:**
+**Celery worker** (in a second terminal, from `Backend/`)
+
+```bash
+celery -A config worker --loglevel=info
+# Windows: add --pool=solo
+```
+
+To skip Celery during development, set `ANALYSIS_FORCE_SYNC=True`. Analysis then runs inside the API request.
+
+**Frontend** (in a third terminal)
+
 ```bash
 cd Frontend
 npm install
@@ -162,247 +197,200 @@ npm run dev
 
 ---
 
-## 📚 Documentation
-
-- **[Architecture Documentation](ARCHITECTURE.md)** - Comprehensive system design, database schema, API endpoints
-- **[Docker Guide](DOCKER.md)** - Complete Docker setup, services, health checks, troubleshooting
-- **[Quick Start Guide](DOCKER_QUICKSTART.md)** - Fast setup for developers
-
----
-
-## 🔐 Key Features
-
-### User Roles
-1. **Community Users** - Report damage, upload photos, view AI analysis
-2. **Organization Users** - Review all reports, verify data, track restoration, export analytics
-
-### Rate Limiting (3-Tier)
-- **Authentication**: 5 requests/minute
-- **Image Analysis**: 20 requests/day
-- **General API**: 100 requests/hour
-
-### Authentication
-- JWT tokens with 15-minute expiry
-- Automatic token refresh
-- Role-based access control (RBAC)
-
-### AI Analysis
-- Health score calculation (0-100)
-- Damage detection (binary classification)
-- Risk level assessment (low/medium/high)
-- Async processing with Celery
-
----
-
-## 🗄️ Database Models
-
-| Model | Purpose |
-|-------|---------|
-| **User** | Authentication, roles, organization affiliation |
-| **Report** | Mangrove damage submissions with location & photos |
-| **Analysis** | AI analysis results (health score, damage, risk) |
-| **RestorationProject** | Restoration initiatives tracking |
-| **RestorationEvent** | Individual restoration activities & metrics |
-
----
-
-## 🔌 API Endpoints (Core)
-
-### Authentication
-- `POST /api/token/` - Login with credentials
-- `POST /api/register/` - Create new account
-- `POST /api/token/refresh/` - Refresh access token
-
-### Reports
-- `GET /api/reports/` - List all reports (paginated)
-- `POST /api/reports/` - Submit new report
-- `GET /api/reports/:id/` - Report details
-- `PUT /api/reports/:id/` - Update report
-- `DELETE /api/reports/:id/` - Delete report
-- `GET /api/reports/export/` - Export reports as XLSX
-
-### Analysis
-- `GET /api/analysis/` - List analyses
-- `POST /api/analysis/` - Trigger AI analysis
-- `GET /api/analysis/:id/` - Analysis details
-
-### Restoration
-- `GET /api/projects/` - List restoration projects
-- `POST /api/projects/` - Create project
-- `POST /api/events/` - Log restoration event
-
----
-
-## 🐳 Docker Services
-
-Development environment includes:
-- **PostgreSQL 15** - Main database (port 5432)
-- **Redis 7** - Cache & Celery broker (port 6379)
-- **Django** - REST API (port 8000)
-- **Celery Worker** - Async tasks
-- **Celery Beat** - Scheduled jobs
-- **React Dev Server** - Frontend (port 5173)
-
-Production adds:
-- **Nginx** - Reverse proxy with SSL (ports 80/443)
-- **Gunicorn** with threads for Django
-- **Persistent volumes** for data
-
----
-
-## 🛠️ Development Workflow
-
-### Backend Development
-```bash
-cd Backend
-python manage.py makemigrations
-python manage.py migrate
-python manage.py runserver
-```
-
-### Frontend Development
-```bash
-cd Frontend
-npm run dev      # Vite dev server with hot reload
-npm run build    # Production build
-npm run lint     # ESLint check
-```
-
-### Running Tests
-```bash
-# Backend tests
-cd Backend
-python manage.py test
-
-# Frontend tests
-cd Frontend
-npm test
-```
-
----
-
-## 📊 Error Handling
-
-The application implements comprehensive error handling:
-- **429 (Rate Limited)** - User sees 15-second notification with countdown
-- **401 (Unauthorized)** - Redirect to login after token expiry
-- **500 (Server Error)** - Global error boundary with user-friendly messages
-- **Axios interceptors** capture all errors and route to notification system
-
----
-
 ## 🔧 Configuration
 
-### Environment Variables (.env)
+Templates: [`.env.example`](.env.example) (Docker), [`Backend/.env.example`](Backend/.env.example) (local), and [`.env.production.example`](.env.production.example) (production).
 
-```env
-# Django
-DEBUG=False
-SECRET_KEY=your-secret-key
-ALLOWED_HOSTS=localhost,127.0.0.1,backend
-REQUIRE_ORG_APPROVAL=False
+| Variable | Purpose | Example |
+|----------|---------|---------|
+| `SECRET_KEY` | Django secret key | a long random string |
+| `DEBUG` | Debug mode | `False` |
+| `ALLOWED_HOSTS` | Hosts Django accepts | `localhost,127.0.0.1,backend` |
+| `CORS_ALLOWED_ORIGINS` | Frontend origins | `http://localhost:5173` |
+| `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `DB_HOST`, `DB_PORT` | PostgreSQL connection | `Mangrove`, `postgres`, …, `db`, `5432` |
+| `REDIS_URL` | Cache and throttle storage | `redis://redis:6379/1` |
+| `CELERY_BROKER_URL`, `CELERY_RESULT_BACKEND` | Celery | `redis://redis:6379/1` |
+| `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` | Image storage | from the Cloudinary dashboard |
+| `FEATHERLESS_API_KEY` | AI inference (**required**) | from the Featherless dashboard |
+| `FEATHERLESS_TIMEOUT_SECONDS` | AI request timeout | `45` |
+| `REQUIRE_ORG_APPROVAL` | Organization accounts need admin approval | `False` |
+| `ANALYSIS_ALLOW_DEGRADED_FALLBACK` | Heuristic score when AI is down | `False` |
+| `ANALYSIS_FORCE_SYNC` | Run analysis without Celery | `False` |
+| `VITE_API_URL` | API base URL for the frontend | `http://localhost:8000/api` |
 
-# Database
-DB_ENGINE=django.db.backends.postgresql
-DB_NAME=Mangrove
-DB_USER=postgres
-DB_PASSWORD=postgres
-DB_HOST=db
-DB_PORT=5432
+---
 
-# Redis
-REDIS_URL=redis://redis:6379/1
-CELERY_BROKER_URL=redis://redis:6379/1
-CELERY_RESULT_BACKEND=redis://redis:6379/1
+## 🔌 API Reference
 
-# Cloudinary
-CLOUDINARY_CLOUD_NAME=your-cloud-name
-CLOUDINARY_API_KEY=your-api-key
-CLOUDINARY_API_SECRET=your-api-secret
+All endpoints are under `/api/`. Send `Authorization: Bearer <access_token>` unless the endpoint is marked public.
 
-# Frontend
-VITE_API_URL=http://localhost:8000/api
-VITE_APP_NAME=Mangrove Guardian AI
+### Authentication
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/register/` | Create an account (`community` or `organization` role). Public |
+| POST | `/token/` | Log in and get `access` and `refresh` tokens. Public |
+| POST | `/token/refresh/` | Get a new access token. Public |
+
+### Reports
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/reports/` | List reports (community: own reports; approved organization: all reports) |
+| POST | `/reports/` | Submit a report (`multipart/form-data` with photo) |
+| GET / PUT / PATCH / DELETE | `/reports/{id}/` | Manage a report |
+| GET | `/reports/export/` | Download reports as `.xlsx` |
+
+### Analysis
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/analysis/` | List analyses |
+| POST | `/analysis/` | Start an analysis: `{ "report": <id> }` |
+| GET | `/analysis/{id}/` | Get status and result |
+| POST | `/analysis/{id}/retry/` | Queue a failed analysis again |
+
+### Restoration
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET / POST | `/projects/` | List or create restoration projects |
+| GET / PUT / PATCH / DELETE | `/projects/{id}/` | Manage a project |
+| GET | `/projects/completed-public/` | Completed projects. Public |
+| GET / POST | `/events/` | List or log restoration events |
+
+Tokens: access tokens last 1 hour, refresh tokens last 7 days. The frontend refreshes access tokens automatically.
+
+---
+
+## 🗄️ Data Model
+
 ```
+User ──< Report ──── Analysis (one-to-one)
+  │
+  └──< RestorationProject ──< RestorationEvent
+```
+
+| Model | Key fields |
+|-------|------------|
+| **User** | `role` (`community` / `organization`), `is_approved` |
+| **Report** | `photo` (Cloudinary), `description`, `location`, `lat`, `lng`, `date_submitted` |
+| **Analysis** | `health_score`, `damage_detected`, `risk_level`, `result`, `status` (`pending` / `processing` / `complete` / `failed`) |
+| **RestorationProject** | `name`, `location`, `lat`, `lng`, `start_date`, `end_date`, `status` (`planned` / `ongoing` / `completed`) |
+| **RestorationEvent** | `project`, `trees_planted`, `date`, `description` |
+
+---
+
+## 🛡️ Rate Limiting and Caching
+
+Rate limits use DRF throttles backed by Redis ([`Backend/core/throttles.py`](Backend/core/throttles.py)):
+
+| Scope | Limit | Applies to |
+|-------|-------|------------|
+| `auth` | 5 / minute | Login and registration |
+| `image_analysis` | 20 / day per user | AI analysis |
+| `general` | 100 / hour per user | Reports, projects, events |
+| `anon` | 50 / hour per IP | Unauthenticated requests |
+
+- When a limit is exceeded, the API returns **429** and the UI shows a countdown notification.
+- Throttles **fail open**: if Redis is unavailable, requests still go through instead of returning 500.
+- List endpoints cache results in Redis for 5 minutes. Writes invalidate the cache. Detail endpoints are never cached, so new records are visible at once.
 
 ---
 
 ## 🚢 Deployment
 
-### Production Deployment (Docker Compose)
 ```bash
-# Use production compose file
-docker compose -f docker-compose.prod.yml up -d
-
-# Enable SSL with reverse proxy
-# Configure Nginx for HTTPS
-```
-
-### Production Environment Setup
-
-```bash
-# Create production env file from template
-cp .env.production.example .env
-
-# Edit .env with real production secrets before deploy
-# Required: SECRET_KEY, DB_PASSWORD, REDIS_PASSWORD,
-# CLOUDINARY_*, FEATHERLESS_API_KEY, ALLOWED_HOSTS, CORS_ALLOWED_ORIGINS
-
-# Start production stack
+cp .env.production.example .env     # fill in real secrets
 docker compose -f docker-compose.prod.yml up -d --build
 ```
 
-### Production Security Checklist
+The production stack adds Nginx with TLS (certificates mounted under `./ssl`) and persistent volumes. The frontend can also be deployed to Vercel (`Frontend/vercel.json`).
 
-1. `DEBUG=False` in `.env`
-2. Strong unique `SECRET_KEY`, `DB_PASSWORD`, and `REDIS_PASSWORD`
-3. Restrictive `ALLOWED_HOSTS` and `CORS_ALLOWED_ORIGINS` for your domain only
-4. Valid TLS certificates mounted under `./ssl` (for HTTPS/443)
-5. Rotate any previously exposed keys before deployment
-6. Keep `.env` out of source control
+**Production checklist**
 
-See [Docker Guide](DOCKER.md) for detailed production setup.
+- [ ] `DEBUG=False`
+- [ ] Strong, unique `SECRET_KEY`, `DB_PASSWORD`, and `REDIS_PASSWORD`
+- [ ] `ALLOWED_HOSTS` and `CORS_ALLOWED_ORIGINS` limited to your domain
+- [ ] Valid TLS certificates in `./ssl`
+- [ ] Rotate any keys that were ever committed or shared
+- [ ] `.env` is not in source control
+
+See [DOCKER.md](DOCKER.md) for the full guide.
+
+---
+
+## 📁 Project Structure
+
+```
+Mangrove-Guardian-AI/
+├── Backend/
+│   ├── config/          # Settings, URLs, Celery app
+│   ├── users/           # Custom user model, registration, JWT login
+│   ├── reports/         # Report CRUD and Excel export
+│   ├── analysis/        # AI analysis: Celery task, retries, validation
+│   ├── restoration/     # Restoration projects and events
+│   ├── core/            # Throttles (rate limiting)
+│   ├── Dockerfile
+│   └── requirements.txt
+├── Frontend/
+│   └── src/
+│       ├── pages/       # Landing, auth, dashboard, report form, restoration
+│       ├── components/  # Analysis progress/results, map, cards, notifications
+│       ├── hooks/       # useAuth, useReports, useDashboard, useAnalysisPoller
+│       ├── api/         # Axios client with JWT interceptors
+│       └── services/
+├── docker-compose.yml        # Development stack
+├── docker-compose.prod.yml   # Production stack
+├── nginx.conf
+└── ARCHITECTURE.md
+```
+
+---
+
+## 📚 Documentation
+
+- [ARCHITECTURE.md](ARCHITECTURE.md): system design, database schema, and data flows
+- [DOCKER.md](DOCKER.md): Docker services, health checks, and troubleshooting
+- [DOCKER_QUICKSTART.md](DOCKER_QUICKSTART.md): fast setup
+- [CONTRIBUTING.md](CONTRIBUTING.md): contribution guidelines
+
+---
+
+## 🛠️ Development Commands
+
+```bash
+# Backend
+cd Backend
+python manage.py makemigrations
+python manage.py migrate
+python manage.py test
+black . && flake8
+
+# Frontend
+cd Frontend
+npm run dev       # dev server with hot reload
+npm run build     # type-check and production build
+npm run lint      # ESLint
+```
 
 ---
 
 ## 🤝 Contributing
 
-1. Create feature branch: `git checkout -b feature/your-feature`
-2. Commit changes: `git commit -m "Add your feature"`
-3. Push to branch: `git push origin feature/your-feature`
-4. Open Pull Request
+1. Fork the repository and create a branch: `git checkout -b feature/your-feature`
+2. Commit your changes: `git commit -m "Add your feature"`
+3. Push the branch: `git push origin feature/your-feature`
+4. Open a pull request
 
-### Code Style
-- Backend: PEP 8 with black formatter
-- Frontend: ESLint + Prettier
+Code style: PEP 8 with `black` and `flake8` for the backend, ESLint for the frontend. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ---
 
 ## 📝 License
 
-This project is licensed under the MIT License - see LICENSE file for details.
+This project uses the MIT License. See [LICENSE](LICENSE).
 
 ---
 
-## 📧 Support
-
-For issues, questions, or suggestions:
-- Open an issue on GitHub
-- Check [Architecture Documentation](ARCHITECTURE.md) for technical details
-- Review [Docker Guide](DOCKER.md) for deployment issues
-
----
-
-## 🌍 About Mangroves
-
-Mangrove forests are vital ecosystems that:
-- Protect coastal communities from storms and flooding
-- Filter saltwater and provide nurseries for marine life
-- Store more carbon than any other forest type
-- Support millions of people worldwide
-
-**Mangrove Guardian AI** helps communities monitor and restore these critical ecosystems through technology and collaboration.
-
----
-
-**Built with ❤️ for environmental conservation**
+**Built with 💚 for coastal ecosystems and the communities that protect them.**
